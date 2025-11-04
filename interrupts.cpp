@@ -16,6 +16,7 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
     std::string trace; 
     std::string execution = ""; 
     std::string system_status = ""; 
+    int current_time = time;
 
     //parse each line of the input trace file. 'for' loop to keep track of indices.
     for(size_t i = 0; i < trace_file.size(); i++) {
