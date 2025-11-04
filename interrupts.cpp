@@ -1,18 +1,21 @@
 /**
  *
  * @file interrupts.cpp
- * @author Sasisekhar Govind
+ * @author Bhagya Patel
+ * 
  *
  */
 
 #include<interrupts.hpp>
+#include<filesystem>  
+// Global PID counter for child processes
+unsigned int next_pid = 1;
 
 std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string> trace_file, int time, std::vector<std::string> vectors, std::vector<int> delays, std::vector<external_file> external_files, PCB current, std::vector<PCB> wait_queue) {
 
-    std::string trace;      //!< string to store single line of trace file
-    std::string execution = "";  //!< string to accumulate the execution output
-    std::string system_status = "";  //!< string to accumulate the system status output
-    int current_time = time;
+    std::string trace; 
+    std::string execution = ""; 
+    std::string system_status = ""; 
 
     //parse each line of the input trace file. 'for' loop to keep track of indices.
     for(size_t i = 0; i < trace_file.size(); i++) {
@@ -28,7 +31,7 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             execution += intr;
             current_time = time;
 
-            execution += std::to_string(current_time) + ", " + std::to_string(delays[duration_intr]) + ", SYSCALL ISR (ADD STEPS HERE)\n";
+            execution += std::to_string(current_time) + ", " + std::to_string(delays[duration_intr]) + ", SYSCALL ISR\n";
             current_time += delays[duration_intr];
 
             execution +=  std::to_string(current_time) + ", 1, IRET\n";
@@ -38,7 +41,7 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             current_time = time;
             execution += intr;
 
-            execution += std::to_string(current_time) + ", " + std::to_string(delays[duration_intr]) + ", ENDIO ISR(ADD STEPS HERE)\n";
+            execution += std::to_string(current_time) + ", " + std::to_string(delays[duration_intr]) + ", ENDIO ISR\n";
             current_time += delays[duration_intr];
 
             execution +=  std::to_string(current_time) + ", 1, IRET\n";
@@ -50,52 +53,110 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
 
             ///////////////////////////////////////////////////////////////////////////////////////////
             //Add your FORK output here
-
-
+            
+            // Step 1: ISR clones the PCB (duration from trace file)
+            execution += std::to_string(current_time) + ", " + std::to_string(duration_intr) + ", cloning the PCB\n";
+            current_time += duration_intr;
+            
+            // Create child process - clone parent's info with new PID
+            PCB child(next_pid++, current.PID, current.program_name, current.size, current.partition_number);
+            
+            // Step 2: Call scheduler (duration = 0)
+            execution += std::to_string(current_time) + ", 0, scheduler called\n";
+            
+            // Step 3: Return from ISR (IRET)
+            execution += std::to_string(current_time) + ", 1, IRET\n";
+            current_time += 1;
+            
+            // Generate system status snapshot showing child as running, parent as waiting
+            wait_queue.push_back(current); // Parent goes to wait queue
+            system_status += "time: " + std::to_string(current_time) + "; current trace: FORK, " + std::to_string(duration_intr) + "\n";
+            system_status += print_PCB(child, wait_queue);
 
             ///////////////////////////////////////////////////////////////////////////////////////////
 
             //The following loop helps you do 2 things:
-            // * Collect the trace of the chile (and only the child, skip parent)
+            // * Collect the trace of the child (and only the child, skip parent)
             // * Get the index of where the parent is supposed to start executing from
             std::vector<std::string> child_trace;
-            bool skip = true;
-            bool exec_flag = false;
-            int parent_index = 0;
+            std::vector<std::string> parent_trace;
+            bool in_child = false;
+            bool in_parent = false;
+            int endif_index = -1;
 
-            for(size_t j = i; j < trace_file.size(); j++) {
+            for(size_t j = i + 1; j < trace_file.size(); j++) {
                 auto [_activity, _duration, _pn] = parse_trace(trace_file[j]);
-                if(skip && _activity == "IF_CHILD") {
-                    skip = false;
-                    continue;
-                } else if(_activity == "IF_PARENT"){
-                    skip = true;
-                    parent_index = j;
-                    if(exec_flag) {
-                        break;
-                    }
-                } else if(skip && _activity == "ENDIF") {
-                    skip = false;
-                    continue;
-                } else if(!skip && _activity == "EXEC") {
-                    skip = true;
-                    child_trace.push_back(trace_file[j]);
-                    exec_flag = true;
+                
+                if(_activity == "IF_CHILD") {
+                    in_child = true;
+                    in_parent = false;
+                } 
+                else if(_activity == "IF_PARENT") {
+                    in_child = false;
+                    in_parent = true;
+                } 
+                else if(_activity == "ENDIF") {
+                    endif_index = j;
+                    break;
                 }
-
-                if(!skip) {
-                    child_trace.push_back(trace_file[j]);
+                else {
+                    // Add trace to appropriate vector(s)
+                    if(in_child) {
+                        child_trace.push_back(trace_file[j]);
+                    }
+                    if(in_parent) {
+                        parent_trace.push_back(trace_file[j]);
+                    }
                 }
             }
-            i = parent_index;
+            
+            // Add everything after ENDIF to both child and parent traces
+            if(endif_index != -1) {
+                for(size_t j = endif_index + 1; j < trace_file.size(); j++) {
+                    child_trace.push_back(trace_file[j]);
+                    parent_trace.push_back(trace_file[j]);
+                }
+            }
 
             ///////////////////////////////////////////////////////////////////////////////////////////
             //With the child's trace, run the child (HINT: think recursion)
 
-
+            auto [child_exec, child_status, child_time] = simulate_trace(
+                child_trace,
+                current_time,
+                vectors,
+                delays,
+                external_files,
+                child,
+                {}  // Child starts with empty wait queue
+            );
+            
+            execution += child_exec;
+            system_status += child_status;
+            current_time = child_time;
 
             ///////////////////////////////////////////////////////////////////////////////////////////
 
+            // After child completes, execute parent process
+            PCB parent = wait_queue.back();
+            wait_queue.pop_back();
+            
+            auto [parent_exec, parent_status, parent_time] = simulate_trace(
+                parent_trace,
+                current_time,
+                vectors,
+                delays,
+                external_files,
+                parent,
+                wait_queue
+            );
+            
+            execution += parent_exec;
+            system_status += parent_status;
+            current_time = parent_time;
+            
+            // Break because we've handled the rest of the trace through recursion
+            break;
 
         } else if(activity == "EXEC") {
             auto [intr, time] = intr_boilerplate(current_time, 3, 10, vectors);
@@ -105,7 +166,56 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             ///////////////////////////////////////////////////////////////////////////////////////////
             //Add your EXEC output here
 
-
+            // Step 1: ISR searches file in external_files and gets memory size
+            unsigned int program_size = get_size(program_name, external_files);
+            if(program_size == (unsigned int)-1) {
+                std::cerr << "ERROR: Program " << program_name << " not found in external files!" << std::endl;
+                break;
+            }
+            
+            execution += std::to_string(current_time) + ", " + std::to_string(duration_intr) + ", Program is " + std::to_string(program_size) + " Mb large\n";
+            current_time += duration_intr;
+            
+            // Step 2: Simulate execution of the loader (15ms per MB)
+            int load_time = program_size * 15;
+            execution += std::to_string(current_time) + ", " + std::to_string(load_time) + ", loading program into memory\n";
+            current_time += load_time;
+            
+            // Step 3: Free old partition and find empty partition where executable fits
+            if(current.partition_number != -1) {
+                free_memory(&current);
+            }
+            
+            // Update PCB with new program information
+            current.program_name = program_name;
+            current.size = program_size;
+            
+            // Allocate new partition (best-fit from smallest)
+            if(!allocate_memory(&current)) {
+                std::cerr << "ERROR! Memory allocation failed for " << program_name << std::endl;
+                break;
+            }
+            
+            // Step 4: Mark partition as occupied (random 1-10ms)
+            int mark_time = (rand() % 10) + 1;
+            execution += std::to_string(current_time) + ", " + std::to_string(mark_time) + ", marking partition as occupied\n";
+            current_time += mark_time;
+            
+            // Step 5: Update PCB with new information (random 1-10ms)
+            int update_time = (rand() % 10) + 1;
+            execution += std::to_string(current_time) + ", " + std::to_string(update_time) + ", updating PCB\n";
+            current_time += update_time;
+            
+            // Step 6: Call scheduler (duration = 0)
+            execution += std::to_string(current_time) + ", 0, scheduler called\n";
+            
+            // Step 7: Return from ISR (IRET)
+            execution += std::to_string(current_time) + ", 1, IRET\n";
+            current_time += 1;
+            
+            // Generate system status snapshot
+            system_status += "time: " + std::to_string(current_time) + "; current trace: EXEC " + program_name + ", " + std::to_string(duration_intr) + "\n";
+            system_status += print_PCB(current, wait_queue);
 
             ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -121,11 +231,25 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             ///////////////////////////////////////////////////////////////////////////////////////////
             //With the exec's trace (i.e. trace of external program), run the exec (HINT: think recursion)
 
-
+            auto [exec_exec, exec_status, exec_time] = simulate_trace(
+                exec_traces,
+                current_time,
+                vectors,
+                delays,
+                external_files,
+                current,
+                wait_queue
+            );
+            
+            execution += exec_exec;
+            system_status += exec_status;
+            current_time = exec_time;
 
             ///////////////////////////////////////////////////////////////////////////////////////////
 
             break; //Why is this important? (answer in report)
+            // Answer: EXEC replaces the process image entirely. The original process no longer exists,
+            // so the remaining trace should not execute. The new program has taken over.
 
         }
     }
@@ -134,6 +258,9 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
 }
 
 int main(int argc, char** argv) {
+
+    // Seed random number generator for random times (1-10ms) in EXEC
+    srand(time(NULL));
 
     //vectors is a C++ std::vector of strings that contain the address of the ISR
     //delays  is a C++ std::vector of ints that contain the delays of each device
@@ -177,8 +304,31 @@ int main(int argc, char** argv) {
 
     input_file.close();
 
-    write_output(execution, "execution.txt");
-    write_output(system_status, "system_status.txt");
+    // Build unique output file names based on the trace input file
+    std::string traceFile = argv[1];
+    std::string base = std::filesystem::path(traceFile).stem().string(); // e.g. "trace1"
+    std::string executionFile = "execution_" + base + ".txt";
+    std::string statusFile = "system_status_" + base + ".txt";
+    
+    // Write the accumulated execution string into the execution file
+    std::ofstream outfile(executionFile);
+    if (!outfile.is_open()) {
+        std::cerr << "Error: Could not open " << executionFile << std::endl;
+        return 1;
+    }
+    outfile << execution;
+    outfile.close();
+    std::cout << "Output generated in " << executionFile << std::endl;
+    
+    // Write the system status to the status file
+    std::ofstream statusOutfile(statusFile);
+    if (!statusOutfile.is_open()) {
+        std::cerr << "Error: Could not open " << statusFile << std::endl;
+        return 1;
+    }
+    statusOutfile << system_status;
+    statusOutfile.close();
+    std::cout << "System status generated in " << statusFile << std::endl;
 
     return 0;
 }
