@@ -59,13 +59,15 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             execution += std::to_string(current_time) + ", " + std::to_string(duration_intr) + ", cloning the PCB\n";
             current_time += duration_intr;
             
-            // Create child process - clone parent's info with new PID
-            PCB child(next_pid++, current.PID, current.program_name, current.size, current.partition_number);
+            // Create child process - initially without partition assignment
+            PCB child(next_pid++, current.PID, current.program_name, current.size, -1);
+            
             // Allocate memory for child process
             if(!allocate_memory(&child)) {
                 std::cerr << "ERROR! Memory allocation failed for child process!" << std::endl;
-                 break;
+                break;
             }
+            
             //Call scheduler (duration = 0)
             execution += std::to_string(current_time) + ", 0, scheduler called\n";
             
@@ -126,6 +128,7 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
             ///////////////////////////////////////////////////////////////////////////////////////////
             //With the child's trace, run the child (HINT: think recursion)
 
+            // Pass the full wait_queue to child so it can see all ancestors
             auto [child_exec, child_status, child_time] = simulate_trace(
                 child_trace,
                 current_time,
@@ -133,7 +136,7 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
                 delays,
                 external_files,
                 child,
-                wait_queue  // Child starts with empty wait queue
+                wait_queue  // Pass wait_queue containing parent(s)
             );
             
             execution += child_exec;
@@ -142,9 +145,11 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
 
             ///////////////////////////////////////////////////////////////////////////////////////////
 
-            // After child completes, execute parent process
+            // After child completes, restore parent from wait_queue
+            // Create copy to preserve ancestors in parent's wait queue
             PCB parent = wait_queue.back();
-            wait_queue.pop_back();
+            std::vector<PCB> parent_wait_queue = wait_queue;
+            parent_wait_queue.pop_back();  // Remove parent from COPY only
             
             auto [parent_exec, parent_status, parent_time] = simulate_trace(
                 parent_trace,
@@ -153,7 +158,7 @@ std::tuple<std::string, std::string, int> simulate_trace(std::vector<std::string
                 delays,
                 external_files,
                 parent,
-                wait_queue
+                parent_wait_queue  // Pass modified copy
             );
             
             execution += parent_exec;

@@ -5,28 +5,33 @@ time: 31; current trace: FORK, 17
 |   1 |        init |               5 |    1 | running |
 |   0 |        init |               6 |    1 | waiting |
 +------------------------------------------------------+
-time: 223; current trace: EXEC program3, 16
+time: 215; current trace: EXEC program3, 16
 +------------------------------------------------------+
 | PID |program name |partition number | size |   state |
 +------------------------------------------------------+
 |   1 |    program3 |               4 |   10 | running |
+|   0 |        init |               6 |    1 | waiting |
 +------------------------------------------------------+
-time: 252; current trace: FORK, 15
+time: 244; current trace: FORK, 15
 +------------------------------------------------------+
 | PID |program name |partition number | size |   state |
 +------------------------------------------------------+
 |   2 |    program3 |               3 |   10 | running |
+|   0 |        init |               6 |    1 | waiting |
 |   1 |    program3 |               4 |   10 | waiting |
 +------------------------------------------------------+
-time: 532; current trace: EXEC program4, 33
+time: 533; current trace: EXEC program4, 33
 +------------------------------------------------------+
 | PID |program name |partition number | size |   state |
 +------------------------------------------------------+
 |   2 |    program4 |               3 |   15 | running |
+|   0 |        init |               6 |    1 | waiting |
+|   1 |    program3 |               4 |   10 | waiting |
 +------------------------------------------------------+
-time: 865; current trace: EXEC program4, 33
+time: 875; current trace: EXEC program4, 33
 +------------------------------------------------------+
 | PID |program name |partition number | size |   state |
 +------------------------------------------------------+
 |   1 |    program4 |               2 |   15 | running |
+|   0 |        init |               6 |    1 | waiting |
 +------------------------------------------------------+
