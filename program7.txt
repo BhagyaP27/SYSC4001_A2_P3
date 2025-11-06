@@ -1,0 +1,3 @@
+CPU, 30
+END_IO, 7
+CPU, 20

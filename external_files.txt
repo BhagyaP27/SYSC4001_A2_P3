@@ -3,3 +3,8 @@ program2, 15
 program3, 10
 program4, 15
 program5, 10
+program6, 15
+program7, 10
+program8, 15
+program9, 10
+program10, 15
