@@ -1,8 +1,12 @@
 /**
  *
  * @file interrupts.cpp
- * @author Bhagya Patel
+ * @author Bhagya Patel 101321450
  * 
+ * @author Tomas Alvarez, 101310738
+ * 
+ * @brief Implementation file for interrupts.cpp the purpose of simulating interrupts, process forking, and program execution.
+ *  
  *
  */
 

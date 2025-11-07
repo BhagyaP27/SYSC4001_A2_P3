@@ -1,3 +1,15 @@
+/**
+ *
+ * @file interrupts.cpp
+ * @author Bhagya Patel 101321450
+ * 
+ * @author Tomas Alvarez, 101310738
+ * 
+ * @brief Header file for interrupts.cpp the purpose of simulating interrupts, process forking, and program execution.
+ * 
+ *
+ */
+
 #ifndef INTERRUPTS_HPP_
 #define INTERRUPTS_HPP_
 
